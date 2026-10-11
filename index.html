@@ -260,24 +260,15 @@ const ghH = () => { const h = { Accept: 'application/vnd.github+json' }; if (ghT
 const errMsg = (s, w) => s === 401 ? 'Token ไม่ถูกต้องหรือหมดอายุ' : (s === 403 || s === 404) ? 'Token ไม่มีสิทธิ์เขียน (ต้องมี Contents: Read and write)' : w + ' (' + s + ')';
 
 async function loadServers() {
-  const t = Date.now();
-  const viaApi = async () => {
-    const r = await fetch(api(CFG.path) + '?ref=' + CFG.branch + '&t=' + t, { headers: ghH(), cache: 'no-store' });
-    return r.ok ? new Response(b64dec((await r.json()).content)) : r;
-  };
-  const viaRaw = () => fetch(rawUrl(CFG.path) + '?t=' + t, { cache: 'no-store' });
-  const viaPages = () => fetch(CFG.path + '?t=' + t, { cache: 'no-store' });
-  // Admin (มี Token) อ่านผ่าน API ได้สดที่สุด ส่วนผู้ใช้ทั่วไปอ่านจาก raw ก่อนเพราะ API จำกัด 60 ครั้ง/ชม./IP
-  let ok = false;
-  for (const f of (ghToken() ? [viaApi, viaRaw, viaPages] : [viaRaw, viaApi, viaPages])) {
-    try {
-      const r = await f();
-      if (!r.ok) continue;
-      const d = JSON.parse(await r.text());
-      if (Array.isArray(d)) { servers = d; ok = true; break; }
-    } catch {}
+  try {
+    const r = await fetch(api(CFG.path) + '?ref=' + CFG.branch + '&t=' + Date.now(), { headers: ghH(), cache: 'no-store' });
+    if (!r.ok) throw 0;
+    servers = JSON.parse(b64dec((await r.json()).content));
+  } catch {
+    try { const r = await fetch(CFG.path + '?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) servers = await r.json(); } catch {}
   }
-  $('#sync').textContent = ok ? new Date().toLocaleTimeString(lang === 'th' ? 'th-TH' : 'en-US', { hour: '2-digit', minute: '2-digit' }) : '!';
+  if (!Array.isArray(servers)) servers = [];
+  $('#sync').textContent = new Date().toLocaleTimeString(lang === 'th' ? 'th-TH' : 'en-US', { hour: '2-digit', minute: '2-digit' });
   render();
 }
 
@@ -316,9 +307,8 @@ async function compress(file) {
   return c.toDataURL('image/jpeg', .86).split(',')[1];
 }
 // รูปจาก GitHub Pages ก่อน ถ้ายังไม่ deploy ให้ลองจาก raw
-function fb(el) { if (!el.dataset.t) { el.dataset.t = 1; el.src = el.dataset.p; } else el.remove(); }
-const imgSrc = p => /^(https?:|data:)/.test(p) ? p : rawUrl(p);
-const img = (s, cls) => s.image ? `<img src="${esc(imgSrc(s.image))}" data-p="${esc(s.image)}" alt="" class="${cls}" onerror="fb(this)">` : '';
+function fb(el) { if (!el.dataset.t) { el.dataset.t = 1; el.src = rawUrl(el.dataset.p); } else el.remove(); }
+const img = (s, cls) => s.image ? `<img src="${esc(s.image)}" data-p="${esc(s.image)}" alt="" class="${cls}" onerror="fb(this)">` : '';
 const initial = s => esc((s.name || '?')[0].toUpperCase());
 
 /* ---------- Render ---------- */
